@@ -4,7 +4,7 @@ import numpy as np
 from torch.distributions import Normal
 # Adapted from ShantongZhang/DeepRL
 
-DEVICE = torch.device('cuda:0')
+DEVICE = torch.device('cpu')
 MIN_LOG_STD = -20
 MAX_LOG_STD = 2
 EPSILON = 1e-6
