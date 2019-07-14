@@ -2,12 +2,11 @@ import torch
 import gym
 from stable_baselines.common.vec_env import DummyVecEnv
 from sac import SACAgent
+import sac.network.DEVICE
 from sac.network import *
 
 if True:
-    global DEVICE
-
-    DEVICE = torch.device('cpu')
+    sac.network.DEVICE = torch.device('cpu')
 
     env_fn = lambda: gym.wrappers.TimeLimit(gym.make("Pendulum-v0"), 20)
     env = DummyVecEnv([env_fn])
