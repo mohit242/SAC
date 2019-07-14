@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
+import time
 from copy import deepcopy
 from collections import deque
 from .network import *
@@ -54,8 +55,8 @@ class SACAgent:
         with torch.no_grad():
             actions, log_prob, _ = self.actornet.sample(self.states)
         # self.actornet.train()
-        next_states, rewards, dones, info = self.env.step(actions)
         actions = actions.cpu().detach().numpy()
+        next_states, rewards, dones, info = self.env.step(actions)
         self.replay_buffer.add_vec([self.states, actions, rewards, next_states, dones])
         self.states = next_states
         self.step_counter += 1
@@ -110,7 +111,7 @@ class SACAgent:
         eps_rewards = deque(maxlen=100)
         eps_rewards.append(0)
         running_rewards = np.zeros(self.env.num_envs)
-
+        start_time = time.time()
         for i in range(iterations):
             rewards, dones = self.train_step()
             running_rewards += rewards
@@ -119,8 +120,10 @@ class SACAgent:
                     eps_rewards.append(running_rewards[idx])
                     running_rewards[idx] = 0
             if i % (iterations // 1000) == 0:
-                print("Steps: {:8d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(
-                    i, eps_rewards[-1], np.mean(eps_rewards)
+                fps = (iterations // 1000) // (time.time() - start_time)
+                start_time = time.time()
+                print("Steps: {:8d}\tfps: {:4f}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(
+                    i, fps, eps_rewards[-1], np.mean(eps_rewards)
                 ), end='\r')
 
     def eval_step(self):
