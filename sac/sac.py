@@ -4,6 +4,7 @@ import numpy as np
 import os
 from copy import deepcopy
 from collections import deque
+from imageio import mimsave
 from .network import *
 from .replay import *
 from .utils import *
@@ -41,7 +42,7 @@ class SACAgent:
 
         self.step_counter = 0
 
-    def train_step(self):
+    def _train_step(self):
         if len(self.replay_buffer) < self.start_steps:
             for _ in range(self.start_steps):
                 actions = [self.env.action_space.sample() for _ in range(self.env.num_envs)]
@@ -62,10 +63,10 @@ class SACAgent:
         # print("Updating model")
         if self.step_counter % self.train_after_steps == 0:
             for _ in range(self.gradient_steps):
-                self.update_models()
+                self._update_models()
         return rewards, dones
 
-    def update_models(self):
+    def _update_models(self):
 
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
 
@@ -112,7 +113,7 @@ class SACAgent:
         running_rewards = np.zeros(self.env.num_envs)
 
         for i in range(iterations):
-            rewards, dones = self.train_step()
+            rewards, dones = self._train_step()
             running_rewards += rewards
             for idx, done in enumerate(dones):
                 if done:
@@ -123,11 +124,29 @@ class SACAgent:
                     i, eps_rewards[-1], np.mean(eps_rewards)
                 ), end='\r')
 
-    def eval_step(self):
-        pass
+    def _eval_step(self):
+        self.actornet.eval()
+        _, _, actions = self.actornet(self.states)
+        next_states, rewards, dones, info = self.env.step(actions)
+        self.states = next_states
+        return rewards, dones
 
-    def eval(self, gif_path=None, num_episodes=1):
-        pass
+    def eval(self, gif_path=None):
+        total_reward = 0
+        done = False
+        frames = []
+        while not done:
+            rewards, dones = self._eval_step()
+            total_reward += rewards[0]
+            done = dones[0]
+            if gif_path is not None:
+                frames.append(self.env.render(mode='rgb_array'))
+        if gif_path is not None:
+            mimsave(gif_path, frames)
+        return total_reward
+
+
+
 
     def save_model(self, dirpath='.'):
         if not os.path.exists(dirpath):
