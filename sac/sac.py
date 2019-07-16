@@ -1,10 +1,9 @@
-import torch
 import torch.nn as nn
-import numpy as np
 import os
 from copy import deepcopy
 from collections import deque
 from imageio import mimsave
+from torch.utils.tensorboard import SummaryWriter
 from .network import *
 from .replay import *
 from .utils import *
@@ -12,14 +11,15 @@ from .utils import *
 
 class SACAgent:
 
-    def __init__(self, env, qnet, vnet, actornet, summary_writer, start_steps=10000, train_after_steps=1,
+    def __init__(self, env, qnet, vnet, actornet, log_dir=None, log_comment="", start_steps=10000, train_after_steps=1,
                  gradient_steps=1, gradient_clip=1, gamma=0.99, minibatch_size=256, buffer_size=10e5,
                  polyak=0.001, max_eps_len=10e4, temperature=0.1):
 
         super().__init__()
         self.env = env
         self.states = env.reset()
-        self.summary_writer = summary_writer
+        self.writer = None
+        self.writer = SummaryWriter(log_dir, comment=log_comment)
         self.qnet = [qnet, deepcopy(qnet)]
         self.qnet[1].apply(layer_init)
         self.vnet = vnet
@@ -86,8 +86,14 @@ class SACAgent:
         actions_p, log_pi_p, _ = self.actornet.sample(states)
         qval_p = torch.min(*[qf(states, actions_p) for qf in self.qnet])
         actor_loss = ((self.temperature * log_pi_p) - qval_p).mean()
-
-
+        losses = {"qval0_loss": qloss[0], "qval1_loss": qloss[1]}
+        self.writer.add_scalars("train/qvalue_loss", losses, self.step_counter)
+        self.writer.add_scalar("train/value_loss", value_loss, self.step_counter)
+        self.writer.add_scalar("train/actor_loss", actor_loss, self.step_counter)
+        # self.writer.add_histogram("train/qnet0_weights",
+        #                           self.qnet[0].state_dict()['body.net.0.weight'].flatten(), self.step_counter)
+        # self.writer.add_histogram("train/qnet1_weights",
+        #                           self.qnet[1].state_dict()['body.net.0.weight'].flatten(), self.step_counter)
         for i in range(2):
             self.qnet_opt[i].zero_grad()
             qloss[i].backward()
@@ -112,17 +118,21 @@ class SACAgent:
         eps_rewards.append(0)
         running_rewards = np.zeros(self.env.num_envs)
 
-        for i in range(iterations):
+        for i in range(int(iterations)):
             rewards, dones = self._train_step()
             running_rewards += rewards
             for idx, done in enumerate(dones):
                 if done:
                     eps_rewards.append(running_rewards[idx])
                     running_rewards[idx] = 0
+                    self.writer.add_scalar("train/mean_reward", np.mean(eps_rewards), global_step=self.step_counter)
+                    self.writer.add_scalar("train/reward", eps_rewards[-1], global_step=self.step_counter)
+
             if i % (iterations // 1000) == 0:
-                print("Steps: {:8d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(
-                    i, eps_rewards[-1], np.mean(eps_rewards)
-                ), end='\r')
+                print("Steps: {:8d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(i,
+                                                                                                eps_rewards[-1],
+                                                                                                np.mean(eps_rewards)),
+                      end='\r')
 
     def _eval_step(self):
         self.actornet.eval()
@@ -146,9 +156,6 @@ class SACAgent:
         if gif_path is not None:
             mimsave(gif_path, frames)
         return total_reward
-
-
-
 
     def save_model(self, dirpath='.'):
         if not os.path.exists(dirpath):

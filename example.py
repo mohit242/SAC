@@ -19,8 +19,8 @@ if True:
     actornet = GaussianPolicyNet(env.action_space.shape[0],
                                  FCBody(env.observation_space.shape[0], [256, 256])).to(DEVICE)
 
-    agent = SACAgent(env, qnet, vnet, actornet, None, start_steps=1000)
+    agent = SACAgent(env, qnet, vnet, actornet, start_steps=1000, log_comment="first")
 
-    # agent.learn(iterations=10000)
-    print(agent.eval("out.gif"))
+    agent.learn(iterations=10000)
+    # print(agent.eval("out.gif"))
     env.close()
