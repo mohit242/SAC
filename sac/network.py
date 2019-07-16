@@ -10,6 +10,11 @@ MAX_LOG_STD = 2
 EPSILON = 1e-6
 
 
+def set_device(device):
+    global DEVICE
+    DEVICE = device
+
+
 def layer_init(layer, w_scale=1.0):
     if isinstance(layer, nn.Linear) or isinstance(layer, nn.Conv2d):
         nn.init.orthogonal_(layer.weight.data)
