@@ -126,8 +126,9 @@ class SACAgent:
 
     def _eval_step(self):
         self.actornet.eval()
-        _, _, actions = self.actornet(self.states)
-        next_states, rewards, dones, info = self.env.step(actions)
+        _, _, actions = self.actornet.sample(self.states)
+        self.actornet.train()
+        next_states, rewards, dones, info = self.env.step(actions.cpu().detach().numpy())
         self.states = next_states
         return rewards, dones
 
@@ -135,6 +136,7 @@ class SACAgent:
         total_reward = 0
         done = False
         frames = []
+        self.env.reset()
         while not done:
             rewards, dones = self._eval_step()
             total_reward += rewards[0]
@@ -152,10 +154,10 @@ class SACAgent:
         if not os.path.exists(dirpath):
             raise Exception("Path does not exist")
         print(f"Saving models in directory {dirpath}")
-        torch.save(self.actornet.state_dict(), os.path.join(dirpath, 'actor.pt'))
-        torch.save(self.qnet[0].state_dict(), os.path.join(dirpath, 'qnet0.pt'))
-        torch.save(self.qnet[1].state_dict(), os.path.join(dirpath, 'qnet1.pt'))
-        torch.save(self.vnet.state_dict(), os.path.join(dirpath, 'vnet.pt'))
+        torch.save(self.actornet.cpu().state_dict(), os.path.join(dirpath, 'actor.pt'))
+        torch.save(self.qnet[0].cpu().state_dict(), os.path.join(dirpath, 'qnet0.pt'))
+        torch.save(self.qnet[1].cpu().state_dict(), os.path.join(dirpath, 'qnet1.pt'))
+        torch.save(self.vnet.cpu().state_dict(), os.path.join(dirpath, 'vnet.pt'))
 
     def load_model(self, dirpath='.'):
         if not os.path.exists(dirpath):

@@ -2,13 +2,12 @@ import torch
 import gym
 from stable_baselines.common.vec_env import DummyVecEnv
 from sac import SACAgent
-import sac.network.DEVICE
 from sac.network import *
 
 if True:
-    sac.network.DEVICE = torch.device('cpu')
+    set_device(torch.device('cpu'))
 
-    env_fn = lambda: gym.wrappers.TimeLimit(gym.make("Pendulum-v0"), 20)
+    env_fn = lambda: gym.wrappers.TimeLimit(gym.make("Pendulum-v0"), 1000)
     env = DummyVecEnv([env_fn])
 
     qnet = VanillaNet(1, FCBody(env.observation_space.shape[0]+env.action_space.shape[0],
@@ -22,5 +21,6 @@ if True:
 
     agent = SACAgent(env, qnet, vnet, actornet, None, start_steps=1000)
 
-    agent.learn(iterations=10000)
-
+    # agent.learn(iterations=10000)
+    print(agent.eval("out.gif"))
+    env.close()
