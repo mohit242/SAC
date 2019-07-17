@@ -23,5 +23,6 @@ if True:
     agent = sac.SACAutoTempAgent(env, qnet, actornet, start_steps=1000, log_comment="autotemp")
 
     agent.learn(iterations=10000)
+    agent.save_model(".")
     # print(agent.eval("out.gif"))
     env.close()
