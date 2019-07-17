@@ -144,8 +144,7 @@ class SACAgent(BaseSAC):
 
         with torch.no_grad():
             val_next_state = self.vnet_target(next_states)
-            q_target = rewards + self.gamma * (1 - dones) * val_next_state.cpu().detach().squeeze(-1).numpy()
-            q_target = tensor(q_target).to(DEVICE).unsqueeze(-1)
+            q_target = tensor(rewards).unsqueeze(-1) + self.gamma * tensor(1 - dones).unsqueeze(-1) * val_next_state
             actions_v, log_pi_v, _ = self.policy.sample(states)
             qvals_v = [qf(states, actions_v) for qf in self.qnet]
             value_target = torch.min(*qvals_v) - self.temperature * log_pi_v
@@ -185,33 +184,78 @@ class SACAgent(BaseSAC):
         soft_update(self.vnet_target, self.vnet, self.polyak)
 
 
-class SACAutoTempAgent():
+class SACAutoTempAgent(BaseSAC):
 
     def __init__(self, env, qnet, policy, log_dir=None, log_comment="", start_steps=10000, train_after_steps=1,
                  gradient_steps=1, gradient_clip=1, gamma=0.99, minibatch_size=256, buffer_size=10e5,
                  polyak=0.001, max_eps_len=10e4):
 
-        super().__init__()
         self.env = env
         self.states = env.reset()
-        self.writer = SummaryWriter(log_dir, comment=log_comment)
+        writer = SummaryWriter(log_dir, comment=log_comment)
         self.qnet = [qnet, deepcopy(qnet)]
         self.qnet[1].apply(layer_init)
-        self.qnet_target = deepcopy(qnet)
+        self.qnet_target = deepcopy(self.qnet)
         self.policy = policy
-        self.start_steps = start_steps
-        self.train_after_steps = train_after_steps
-        self.gradient_steps = gradient_steps
         self.gamma = gamma
         self.gradient_clip = gradient_clip
         self.minibatch_size = minibatch_size
-        self.replay_buffer = Replay(buffer_size, minibatch_size)
+        replay_buffer = Replay(buffer_size, minibatch_size)
         self.polyak = polyak
-        self.max_eps_len = max_eps_len
         self.temperature = tensor([0.])
         self.temperature.requires_grad = True
-
+        self.target_entropy = -torch.prod(tensor(env.action_space.shape)).item()
         self.qnet_opt = [torch.optim.Adam(q.parameters()) for q in self.qnet]
         self.policy_opt = torch.optim.Adam(self.policy.parameters())
         self.temperature_opt = torch.optim.Adam([self.temperature])
-        self.step_counter = 0
+
+        super().__init__(env, policy, writer, start_steps=start_steps, train_after_steps=train_after_steps,
+                         gradient_steps=gradient_steps, replay_buffer=replay_buffer, max_eps_len=max_eps_len)
+
+    def _update_models(self):
+
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample()
+
+        with torch.no_grad():
+            next_actions, log_prob_next, _ = self.policy.sample(next_states)
+            val_next_state = torch.min(*[qf(next_states, next_actions) for qf in self.qnet])
+            qval_next = tensor((1 - dones)).unsqueeze(-1) * (val_next_state - self.temperature * log_prob_next)
+            q_target = tensor(rewards).unsqueeze(-1) + self.gamma * qval_next
+
+        qvals = [qf(states, actions) for qf in self.qnet]
+        mse = nn.MSELoss()
+        qloss = [mse(qv, q_target) for qv in qvals]
+
+        actions_p, log_pi_p, _ = self.policy.sample(states)
+        qval_p = torch.min(*[qf(states, actions_p) for qf in self.qnet])
+        policy_loss = ((self.temperature * log_pi_p) - qval_p).mean()
+
+        temperature_loss = - (self.temperature * (log_pi_p + self.target_entropy).detach()).mean()
+        losses = {"qval0_loss": qloss[0], "qval1_loss": qloss[1]}
+        self.writer.add_scalars("train/qvalue_loss", losses, self.step_counter)
+        self.writer.add_scalar("train/policy_loss", policy_loss, self.step_counter)
+        self.writer.add_scalar("train/temperature_loss", temperature_loss, self.step_counter)
+        # self.writer.add_histogram("train/qnet0_weights",
+        #                           self.qnet[0].state_dict()['body.net.0.weight'].flatten(), self.step_counter)
+        # self.writer.add_histogram("train/qnet1_weights",
+        #                           self.qnet[1].state_dict()['body.net.0.weight'].flatten(), self.step_counter)
+        for i in range(2):
+            self.qnet_opt[i].zero_grad()
+            qloss[i].backward()
+            torch.nn.utils.clip_grad_norm_(self.qnet[i].parameters(), self.gradient_clip)
+            self.qnet_opt[i].step()
+
+        self.policy_opt.zero_grad()
+        policy_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.gradient_clip)
+        self.policy_opt.step()
+
+        self.temperature_opt.zero_grad()
+        temperature_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.temperature, self.gradient_clip)
+        self.temperature_opt.step()
+
+        self.writer.add_scalar("train/temperature", self.temperature, self.step_counter)
+
+        for i in range(2):
+            soft_update(self.qnet_target[i], self.qnet[i], self.polyak)
