@@ -9,9 +9,11 @@ MIN_LOG_STD = -20
 MAX_LOG_STD = 2
 EPSILON = 1e-6
 
+
 def set_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
+
 
 def set_device(device):
     global DEVICE
@@ -60,6 +62,7 @@ class FCBody(nn.Module):
             x = torch.cat([x, action], dim=1)
         return self.net(x)
 
+
 class VanillaNet(nn.Module):
     def __init__(self, output_dim, body):
         super().__init__()
@@ -71,6 +74,7 @@ class VanillaNet(nn.Module):
         phi = self.body(tensor(x), tensor(action))
         y = self.fc_head(phi)
         return y
+
 
 class GaussianPolicyNet(nn.Module):
     def __init__(self, output_dim, body):

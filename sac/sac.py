@@ -10,6 +10,7 @@ from .network import *
 from .replay import *
 from .utils import *
 
+
 class BaseSAC(ABC):
 
     def __init__(self, env, policy, writer, start_steps=10000, train_after_steps=1, gradient_steps=1,
@@ -118,7 +119,7 @@ class SACAgent(BaseSAC):
 
     def __init__(self, env, qnet, vnet, policy, log_dir=None, log_comment="", start_steps=10000, train_after_steps=1,
                  gradient_steps=1, gradient_clip=1, gamma=0.99, minibatch_size=256, buffer_size=10e5,
-                 polyak=0.001, max_eps_len=10e4, temperature=0.1):
+                 polyak=0.001, max_eps_len=10e4, temperature=0.1, lr=3e-4):
 
         writer = SummaryWriter(log_dir, comment=log_comment)
         self.qnet = [qnet, deepcopy(qnet)]
@@ -135,9 +136,9 @@ class SACAgent(BaseSAC):
 
         super().__init__(env, policy, writer, start_steps=start_steps, train_after_steps=train_after_steps,
                          gradient_steps=gradient_steps, replay_buffer=replay_buffer, max_eps_len=max_eps_len)
-        self.qnet_opt = [torch.optim.Adam(q.parameters()) for q in self.qnet]
-        self.vnet_opt = torch.optim.Adam(self.vnet.parameters())
-        self.policy_opt = torch.optim.Adam(self.policy.parameters())
+        self.qnet_opt = [torch.optim.Adam(q.parameters(), lr=lr) for q in self.qnet]
+        self.vnet_opt = torch.optim.Adam(self.vnet.parameters(), lr=lr)
+        self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=lr)
 
         self.step_counter = 0
 
@@ -171,17 +172,17 @@ class SACAgent(BaseSAC):
         for i in range(2):
             self.qnet_opt[i].zero_grad()
             qloss[i].backward()
-            torch.nn.utils.clip_grad_norm_(self.qnet[i].parameters(), self.gradient_clip)
+            # torch.nn.utils.clip_grad_norm_(self.qnet[i].parameters(), self.gradient_clip)
             self.qnet_opt[i].step()
 
         self.vnet_opt.zero_grad()
         value_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.vnet.parameters(), self.gradient_clip)
+        # torch.nn.utils.clip_grad_norm_(self.vnet.parameters(), self.gradient_clip)
         self.vnet_opt.step()
 
         self.policy_opt.zero_grad()
         policy_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.gradient_clip)
+        # torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.gradient_clip)
         self.policy_opt.step()
 
         soft_update(self.vnet_target, self.vnet, self.polyak)
@@ -191,7 +192,7 @@ class SACAutoTempAgent(BaseSAC):
 
     def __init__(self, env, qnet, policy, log_dir=None, log_comment="", start_steps=10000, train_after_steps=1,
                  gradient_steps=1, gradient_clip=1, gamma=0.99, minibatch_size=256, buffer_size=10e5,
-                 polyak=0.001, max_eps_len=10e4):
+                 polyak=0.001, max_eps_len=10e4, lr=3e-4):
 
         self.env = env
         self.states = env.reset()
@@ -208,9 +209,9 @@ class SACAutoTempAgent(BaseSAC):
         self.temperature = tensor([0.])
         self.temperature.requires_grad = True
         self.target_entropy = -torch.prod(tensor(env.action_space.shape)).item()
-        self.qnet_opt = [torch.optim.Adam(q.parameters()) for q in self.qnet]
-        self.policy_opt = torch.optim.Adam(self.policy.parameters())
-        self.temperature_opt = torch.optim.Adam([self.temperature])
+        self.qnet_opt = [torch.optim.Adam(q.parameters(), lr=lr) for q in self.qnet]
+        self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=lr)
+        self.temperature_opt = torch.optim.Adam([self.temperature], lr=lr)
 
         super().__init__(env, policy, writer, start_steps=start_steps, train_after_steps=train_after_steps,
                          gradient_steps=gradient_steps, replay_buffer=replay_buffer, max_eps_len=max_eps_len)
@@ -245,17 +246,17 @@ class SACAutoTempAgent(BaseSAC):
         for i in range(2):
             self.qnet_opt[i].zero_grad()
             qloss[i].backward()
-            torch.nn.utils.clip_grad_norm_(self.qnet[i].parameters(), self.gradient_clip)
+            # torch.nn.utils.clip_grad_norm_(self.qnet[i].parameters(), self.gradient_clip)
             self.qnet_opt[i].step()
 
         self.policy_opt.zero_grad()
         policy_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.gradient_clip)
+        # torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.gradient_clip)
         self.policy_opt.step()
 
         self.temperature_opt.zero_grad()
         temperature_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.temperature, self.gradient_clip)
+        # torch.nn.utils.clip_grad_norm_(self.temperature, self.gradient_clip)
         self.temperature_opt.step()
 
         self.writer.add_scalar("train/temperature", self.temperature, self.step_counter)

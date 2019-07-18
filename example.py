@@ -23,13 +23,13 @@ if __name__ == "__main__":
     env = DummyVecEnv([env_fn])
 
     qnet = sac.VanillaNet(1, sac.FCBody(env.observation_space.shape[0]+env.action_space.shape[0],
-                                [256, 256])).to(sac.DEVICE)
+                                [256, 256])).to(torch.device(args.gpu))
 
     vnet = sac.VanillaNet(1, sac.FCBody(env.observation_space.shape[0],
-                                [256, 256])).to(sac.DEVICE)
+                                [256, 256])).to(torch.device(args.gpu))
 
     actornet = sac.GaussianPolicyNet(env.action_space.shape[0],
-                                 sac.FCBody(env.observation_space.shape[0], [256, 256])).to(sac.DEVICE)
+                                 sac.FCBody(env.observation_space.shape[0], [256, 256])).to(torch.device(args.gpu))
 
     # agent = SACAgent(env, qnet, vnet, actornet, start_steps=1000, log_comment="first")
     agent = sac.SACAutoTempAgent(env, qnet, actornet, start_steps=1000, log_comment=args.name)
