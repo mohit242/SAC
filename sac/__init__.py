@@ -1,2 +1,3 @@
-from .sac import *
-from sac.network import *
+from .sac import SACAutoTempAgent, SACAgent
+from .network import *
+from .utils import ActionSACWrapper
