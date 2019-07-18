@@ -9,6 +9,9 @@ MIN_LOG_STD = -20
 MAX_LOG_STD = 2
 EPSILON = 1e-6
 
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
 
 def set_device(device):
     global DEVICE
