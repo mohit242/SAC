@@ -1,5 +1,6 @@
 import torch.nn as nn
 import os
+import time
 from copy import deepcopy
 from collections import deque
 from imageio import mimsave
@@ -58,7 +59,7 @@ class BaseSAC(ABC):
         eps_rewards = deque(maxlen=100)
         eps_rewards.append(0)
         running_rewards = np.zeros(self.env.num_envs)
-
+        start_time = time.time()
         for i in range(int(iterations)):
             rewards, dones = self._train_step()
             running_rewards += rewards
@@ -70,7 +71,9 @@ class BaseSAC(ABC):
                     self.writer.add_scalar("train/reward", eps_rewards[-1], global_step=self.step_counter)
 
             if i % (iterations // 1000) == 0:
-                print("Steps: {:8d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(i,
+                fps = (time.time() - start_time) / (iterations // 1000)
+                start_time = time.time()
+                print("Steps: {:8d}\tFPS: {:4d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(i, fps
                                                                                                 eps_rewards[-1],
                                                                                                 np.mean(eps_rewards)),
                       end='\r')
