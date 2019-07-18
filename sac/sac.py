@@ -10,7 +10,6 @@ from .network import *
 from .replay import *
 from .utils import *
 
-
 class BaseSAC(ABC):
 
     def __init__(self, env, policy, writer, start_steps=10000, train_after_steps=1, gradient_steps=1,
@@ -71,12 +70,13 @@ class BaseSAC(ABC):
                     self.writer.add_scalar("train/reward", eps_rewards[-1], global_step=self.step_counter)
 
             if i % (iterations // 1000) == 0:
-                fps = (time.time() - start_time) / (iterations // 1000)
+                fps = (iterations // 1000)/(time.time() - start_time)
                 start_time = time.time()
-                print("Steps: {:8d}\tFPS: {:4d}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(i, fps,
+                print("Steps: {:8d}\tFPS: {:4f}\tLastest Episode reward: {:4f}\tMean Rewards: {:4f}".format(i, fps,
                                                                                                 eps_rewards[-1],
                                                                                                 np.mean(eps_rewards)),
                       end='\r')
+        print("\n")
 
     def _eval_step(self):
         self.policy.eval()
@@ -221,7 +221,7 @@ class SACAutoTempAgent(BaseSAC):
 
         with torch.no_grad():
             next_actions, log_prob_next, _ = self.policy.sample(next_states)
-            val_next_state = torch.min(*[qf(next_states, next_actions) for qf in self.qnet])
+            val_next_state = torch.min(*[qf(next_states, next_actions) for qf in self.qnet_target])
             qval_next = tensor((1 - dones)).unsqueeze(-1) * (val_next_state - self.temperature * log_prob_next)
             q_target = tensor(rewards).unsqueeze(-1) + self.gamma * qval_next
 
