@@ -38,8 +38,8 @@ class BaseSAC(ABC):
         with torch.no_grad():
             actions, log_prob, _ = self.policy.sample(self.states)
         # self.policy.train()
-        next_states, rewards, dones, info = self.env.step(actions)
         actions = actions.cpu().detach().numpy()
+        next_states, rewards, dones, info = self.env.step(actions)
         self.replay_buffer.add_vec([self.states, actions, rewards, next_states, dones])
         self.states = next_states
         self.step_counter += 1
