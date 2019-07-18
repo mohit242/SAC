@@ -3,7 +3,6 @@ import gym
 from stable_baselines.common.vec_env import DummyVecEnv
 import sac
 import argparse
-import wandb
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -18,6 +17,7 @@ if __name__ == "__main__":
     sac.set_seed(0)
 
     if args.wandb:
+        import wandb
         wandb.init(project="sac", name=args.name, sync_tensorboard=True)
     env_fn = lambda: sac.ActionSACWrapper(gym.wrappers.TimeLimit(gym.make(args.env), 1000))
     env = DummyVecEnv([env_fn])
