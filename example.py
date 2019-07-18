@@ -2,12 +2,24 @@ import torch
 import gym
 from stable_baselines.common.vec_env import DummyVecEnv
 import sac
+import argparse
+import wandb
 
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--wandb", action="store_true", help="Enables wandb logging")
+    parser.add_argument("--gpu", action="store_const", const="cuda:0", default="cpu", help="Sets device to gpu")
+    parser.add_argument("--name", "-n", type=str, default=None, help="Experiment name for logging")
+    parser.add_argument("--env", "-e", type=str, default="Pendulum-v0", help="Name of gym env")
+    parser.add_argument("--steps", type=int, default=10000, help="Number of learning steps")
+    args = parser.parse_args()
 
-if True:
-    sac.set_device(torch.device('cpu'))
+    sac.set_device(torch.device(args.gpu))
+    sac.set_seed(0)
 
-    env_fn = lambda: gym.wrappers.TimeLimit(gym.make("Pendulum-v0"), 1000)
+    if args.wandb:
+        wandb.init(project="sac", name=args.name, sync_tensorboard=True)
+    env_fn = lambda: sac.ActionSACWrapper(gym.wrappers.TimeLimit(gym.make(args.env), 1000))
     env = DummyVecEnv([env_fn])
 
     qnet = sac.VanillaNet(1, sac.FCBody(env.observation_space.shape[0]+env.action_space.shape[0],
@@ -20,9 +32,9 @@ if True:
                                  sac.FCBody(env.observation_space.shape[0], [256, 256])).to(sac.DEVICE)
 
     # agent = SACAgent(env, qnet, vnet, actornet, start_steps=1000, log_comment="first")
-    agent = sac.SACAutoTempAgent(env, qnet, actornet, start_steps=1000, log_comment="autotemp")
+    agent = sac.SACAutoTempAgent(env, qnet, actornet, start_steps=1000, log_comment=args.name)
 
-    agent.learn(iterations=10000)
-    agent.save_model(".")
+    agent.learn(iterations=args.steps)
+    agent.save_model(wandb.run.dir if args.wandb else ".")
     # print(agent.eval("out.gif"))
     env.close()
