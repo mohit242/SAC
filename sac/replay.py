@@ -13,7 +13,8 @@ class Replay:
     def add(self, experience):
         if len(self.buffer) < self.capacity:
             self.buffer.append(experience)
-        self.buffer[self.position] = experience
+        else:
+            self.buffer[self.position] = experience
         self.position = (self.position + 1) % self.capacity
 
     def add_batch(self, experiences):
